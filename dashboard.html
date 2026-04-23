@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovaMind — Agency Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────── */
+    :root {
+      --bg:          #080b14;
+      --bg-card:     rgba(14, 21, 38, 0.85);
+      --bg-card2:    rgba(20, 30, 55, 0.6);
+      --border:      rgba(99, 179, 237, 0.12);
+      --border-glow: rgba(99, 179, 237, 0.35);
+      --text:        #e2e8f0;
+      --text-muted:  #64748b;
+      --text-dim:    #94a3b8;
+      --accent:      #3b82f6;
+      --accent2:     #8b5cf6;
+      --success:     #10b981;
+      --warning:     #f59e0b;
+      --danger:      #ef4444;
+      --info:        #06b6d4;
+      --gold:        #f59e0b;
+      --radius:      14px;
+      --radius-sm:   8px;
+      --shadow:      0 8px 32px rgba(0,0,0,0.4);
+      --font:        'Inter', sans-serif;
+      --mono:        'JetBrains Mono', monospace;
+    }
+
+    /* ─── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Layout ────────────────────────────────────────────── */
+    .app { position: relative; z-index: 1; }
+
+    /* ─── Header ────────────────────────────────────────────── */
+    header {
+      background: rgba(8,11,20,0.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px rgba(59,130,246,0.4);
+    }
+    .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+    .logo-sub  { font-size: 11px; color: var(--text-muted); font-weight: 400; letter-spacing: 1px; text-transform: uppercase; }
+
+    .header-right { display: flex; align-items: center; gap: 20px; }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      background: rgba(16,185,129,0.12);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 20px;
+      font-size: 12px; color: var(--success); font-weight: 600;
+    }
+    .status-pill .dot {
+      width: 7px; height: 7px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse-dot 2s infinite;
+    }
+
+    .health-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 13px; font-weight: 600;
+    }
+    .health-score { font-size: 18px; font-weight: 800; }
+
+    .last-update { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+
+    .btn-refresh {
+      padding: 7px 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: var(--radius-sm);
+      color: white; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      font-family: var(--font);
+    }
+    .btn-refresh:hover { opacity: 0.85; transform: scale(0.97); }
+
+    /* ─── Main Content ──────────────────────────────────────── */
+    main { padding: 24px 28px; max-width: 1560px; margin: 0 auto; }
+
+    /* ─── Section Header ────────────────────────────────────── */
+    .section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ─── KPI Row ───────────────────────────────────────────── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.25s, transform 0.2s;
+      cursor: default;
+    }
+    .kpi-card:hover {
+      border-color: var(--border-glow);
+      transform: translateY(-2px);
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      opacity: 0.06;
+      border-radius: var(--radius);
+    }
+    .kpi-card.blue::before   { background: radial-gradient(at 0% 0%, var(--accent), transparent 70%); }
+    .kpi-card.purple::before { background: radial-gradient(at 0% 0%, var(--accent2), transparent 70%); }
+    .kpi-card.green::before  { background: radial-gradient(at 0% 0%, var(--success), transparent 70%); }
+    .kpi-card.orange::before { background: radial-gradient(at 0% 0%, var(--warning), transparent 70%); }
+    .kpi-card.cyan::before   { background: radial-gradient(at 0% 0%, var(--info), transparent 70%); }
+    .kpi-card.red::before    { background: radial-gradient(at 0% 0%, var(--danger), transparent 70%); }
+
+    .kpi-icon { font-size: 20px; margin-bottom: 10px; }
+    .kpi-value {
+      font-size: 32px; font-weight: 800; letter-spacing: -1px;
+      line-height: 1;
+    }
+    .kpi-label { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-trend { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+    .kpi-trend.up   { color: var(--success); }
+    .kpi-trend.down { color: var(--danger); }
+
+    /* ─── Agent Grid ────────────────────────────────────────── */
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .agent-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: flex; align-items: center; gap: 14px;
+      transition: all 0.25s;
+      cursor: pointer;
+      position: relative;
+    }
+    .agent-card:hover {
+      border-color: var(--border-glow);
+      background: var(--bg-card2);
+      transform: translateX(2px);
+    }
+    .agent-card.healthy  { border-left: 3px solid var(--success); }
+    .agent-card.warning  { border-left: 3px solid var(--warning); }
+    .agent-card.offline  { border-left: 3px solid var(--danger); }
+    .agent-card.unknown  { border-left: 3px solid var(--text-muted); }
+
+    .agent-avatar {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 18px; flex-shrink: 0;
+      background: var(--bg-card2);
+    }
+    .agent-info { flex: 1; min-width: 0; }
+    .agent-name { font-size: 13px; font-weight: 600; }
+    .agent-last { font-size: 10px; color: var(--text-muted); font-family: var(--mono); margin-top: 2px; }
+    .agent-status-badge {
+      padding: 2px 8px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+    }
+    .agent-status-badge.healthy { background: rgba(16,185,129,0.15); color: var(--success); }
+    .agent-status-badge.warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .agent-status-badge.offline { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .agent-status-badge.unknown { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+    .agent-tasks {
+      font-size: 10px; color: var(--text-dim);
+      font-family: var(--mono); margin-top: 3px;
+    }
+
+    /* ─── 3-col panels ──────────────────────────────────────── */
+    .panels-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .panel-wide-2 {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    /* ─── Card Base ─────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-title { font-size: 13px; font-weight: 700; }
+    .card-body  { padding: 20px; }
+
+    /* ─── Pipeline Bars ─────────────────────────────────────── */
+    .pipeline-item {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .pipeline-item:last-child { margin-bottom: 0; }
+    .pipeline-label { font-size: 12px; color: var(--text-dim); width: 110px; flex-shrink: 0; }
+    .pipeline-bar-wrap {
+      flex: 1; height: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px; overflow: hidden;
+    }
+    .pipeline-bar {
+      height: 100%; border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pipeline-count { font-size: 13px; font-weight: 700; width: 36px; text-align: right; flex-shrink: 0; }
+
+    /* ─── Task Queue Table ──────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      padding: 10px 14px; text-align: left;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); color: var(--text); }
+
+    /* Status badges */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      font-family: var(--font);
+    }
+    .badge.pending      { background: rgba(245,158,11,0.15);  color: var(--warning); }
+    .badge.in_progress  { background: rgba(59,130,246,0.15);  color: var(--accent); }
+    .badge.done         { background: rgba(16,185,129,0.15);  color: var(--success); }
+    .badge.dead_letter  { background: rgba(239,68,68,0.15);   color: var(--danger); }
+    .badge.approved     { background: rgba(16,185,129,0.15);  color: var(--success); }
+    .badge.qa_rejected  { background: rgba(239,68,68,0.15);   color: var(--danger); }
+    .badge.qa_pending   { background: rgba(245,158,11,0.15);  color: var(--warning); }
+    .badge.human_review { background: rgba(139,92,246,0.15);  color: var(--accent2); }
+    .badge.high         { background: rgba(239,68,68,0.15);   color: var(--danger); }
+    .badge.critical     { background: rgba(239,68,68,0.25);   color: #ff6b6b; }
+    .badge.warning      { background: rgba(245,158,11,0.15);  color: var(--warning); }
+    .badge.new          { background: rgba(6,182,212,0.15);   color: var(--info); }
+    .badge.contacted    { background: rgba(16,185,129,0.15);  color: var(--success); }
+
+    /* ─── Trigger Panel ─────────────────────────────────────── */
+    .trigger-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .trigger-btn {
+      padding: 12px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: left;
+      transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+      font-family: var(--font);
+    }
+    .trigger-btn:hover {
+      border-color: var(--border-glow);
+      background: var(--bg-card);
+      transform: translateY(-1px);
+    }
+    .trigger-btn:active { transform: scale(0.97); }
+    .trigger-btn .icon { font-size: 16px; flex-shrink: 0; }
+    .trigger-btn .sub  { font-size: 10px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 1px; }
+
+    .trigger-input-row {
+      display: flex; gap: 10px; margin-bottom: 14px;
+    }
+    .trigger-input {
+      flex: 1; padding: 10px 14px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text); font-size: 13px;
+      font-family: var(--font); outline: none;
+      transition: border-color 0.2s;
+    }
+    .trigger-input:focus { border-color: var(--border-glow); }
+    .trigger-input::placeholder { color: var(--text-muted); }
+
+    /* ─── Alerts Feed ───────────────────────────────────────── */
+    .alert-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .alert-body { flex: 1; min-width: 0; }
+    .alert-msg  { font-size: 12px; color: var(--text); line-height: 1.4; }
+    .alert-meta { font-size: 10px; color: var(--text-muted); font-family: var(--mono); margin-top: 4px; }
+    .no-data    { color: var(--text-muted); font-size: 12px; text-align: center; padding: 28px 0; }
+
+    /* ─── Chart Canvas ──────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ─── Finance Strip ─────────────────────────────────────── */
+    .finance-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 14px; margin-bottom: 28px;
+    }
+    .finance-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      text-align: center;
+    }
+    .finance-val   { font-size: 28px; font-weight: 800; color: var(--gold); }
+    .finance-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .finance-sub   { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ─── Progress Ring ─────────────────────────────────────── */
+    .ring-wrap { display: flex; align-items: center; gap: 16px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-info { flex: 1; }
+    .ring-title { font-size: 12px; font-weight: 600; }
+    .ring-sub   { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ─── Log Stream ────────────────────────────────────────── */
+    .log-stream {
+      background: rgba(0,0,0,0.4);
+      border-radius: var(--radius-sm);
+      padding: 12px; max-height: 280px; overflow-y: auto;
+      font-family: var(--mono); font-size: 10px; line-height: 1.7;
+    }
+    .log-stream::-webkit-scrollbar { width: 4px; }
+    .log-stream::-webkit-scrollbar-track { background: transparent; }
+    .log-stream::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .log-line { display: flex; gap: 10px; }
+    .log-ts   { color: var(--text-muted); flex-shrink: 0; }
+    .log-ag   { color: var(--accent2); flex-shrink: 0; width: 120px; }
+    .log-msg  { color: var(--text-dim); }
+    .log-line.error .log-msg { color: var(--danger); }
+    .log-line.warn  .log-msg { color: var(--warning); }
+    .log-line.info  .log-msg { color: var(--text-dim); }
+
+    /* ─── Animations ────────────────────────────────────────── */
+    @keyframes pulse-dot {
+      0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+      50%      { opacity: 0.8; box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card, .kpi-card, .agent-card { animation: fadeIn 0.4s ease both; }
+
+    /* ─── Loading Skeleton ──────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+      background-size: 400% 100%; animation: shimmer 1.5s infinite;
+      border-radius: 4px; display: inline-block;
+    }
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+    /* ─── Toast ─────────────────────────────────────────────── */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast {
+      padding: 12px 18px; border-radius: 10px;
+      font-size: 13px; font-weight: 500;
+      animation: slideIn 0.3s ease;
+      max-width: 340px;
+    }
+    .toast.success { background: rgba(16,185,129,0.95); color: white; }
+    .toast.error   { background: rgba(239,68,68,0.95);  color: white; }
+    .toast.info    { background: rgba(59,130,246,0.95); color: white; }
+    @keyframes slideIn { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
+
+    /* ─── Responsive ────────────────────────────────────────── */
+    @media (max-width: 1200px) {
+      .kpi-row { grid-template-columns: repeat(3, 1fr); }
+      .agent-grid { grid-template-columns: repeat(3, 1fr); }
+      .panels-row { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
+      main { padding: 16px; }
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .agent-grid { grid-template-columns: repeat(2, 1fr); }
+      .panels-row, .panel-wide-2, .finance-row { grid-template-columns: 1fr; }
+      .trigger-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ─── Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🧠</div>
+      <div>
+        <div class="logo-text">NovaMind</div>
+        <div class="logo-sub">Agency Command Center</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <div class="dot"></div>
+        <span id="header-status">Systems Online</span>
+      </div>
+      <div class="health-badge">
+        <span>Health</span>
+        <span class="health-score" id="header-health">--</span>
+        <span style="font-size:11px;color:var(--text-muted)">/100</span>
+      </div>
+      <span class="last-update" id="last-update">Connecting...</span>
+      <button class="btn-refresh" onclick="refreshAll()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ─── KPI Row ─────────────────────────────────────────── -->
+    <div class="section-title">📊 Key Performance Indicators</div>
+    <div class="kpi-row">
+      <div class="kpi-card blue">
+        <div class="kpi-icon">⚡</div>
+        <div class="kpi-value" id="kpi-tasks-done">--</div>
+        <div class="kpi-label">Tasks Completed</div>
+        <div class="kpi-trend" id="kpi-tasks-pending">-- pending</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-value" id="kpi-content-approved">--</div>
+        <div class="kpi-label">Content Approved</div>
+        <div class="kpi-trend" id="kpi-qa-rate">QA rate: --%</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-value" id="kpi-leads">--</div>
+        <div class="kpi-label">Leads Qualified</div>
+        <div class="kpi-trend" id="kpi-leads-contacted">-- contacted</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-icon">📧</div>
+        <div class="kpi-value" id="kpi-emails">--</div>
+        <div class="kpi-label">Emails Sent Today</div>
+        <div class="kpi-trend">300/day limit</div>
+      </div>
+      <div class="kpi-card cyan">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-value" id="kpi-value">$--</div>
+        <div class="kpi-label">Value Generated</div>
+        <div class="kpi-trend up">$0 actual cost</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-icon">🚨</div>
+        <div class="kpi-value" id="kpi-alerts">--</div>
+        <div class="kpi-label">Open Alerts</div>
+        <div class="kpi-trend" id="kpi-alerts-sub">-- critical</div>
+      </div>
+    </div>
+
+    <!-- ─── Agent Grid ───────────────────────────────────────── -->
+    <div class="section-title">🤖 Agent Fleet Status</div>
+    <div class="agent-grid" id="agent-grid">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- ─── Task + Content pipelines ────────────────────────── -->
+    <div class="section-title">🔀 Pipelines</div>
+    <div class="panels-row">
+
+      <!-- Task Queue -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ Task Queue</span>
+          <span style="font-size:11px;color:var(--text-muted)" id="task-total-badge">-- total</span>
+        </div>
+        <div class="card-body">
+          <div class="pipeline-item">
+            <span class="pipeline-label">Pending</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="bar-pending" style="background:var(--warning);width:0"></div></div>
+            <span class="pipeline-count" id="cnt-pending">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">In Progress</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="bar-inprog" style="background:var(--accent);width:0"></div></div>
+            <span class="pipeline-count" id="cnt-inprog">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">Done</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="bar-done" style="background:var(--success);width:0"></div></div>
+            <span class="pipeline-count" id="cnt-done">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">Dead Letter</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="bar-dead" style="background:var(--danger);width:0"></div></div>
+            <span class="pipeline-count" id="cnt-dead">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content Pipeline -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📝 Content Pipeline</span>
+          <span style="font-size:11px;color:var(--text-muted)" id="content-total-badge">-- total</span>
+        </div>
+        <div class="card-body">
+          <div class="pipeline-item">
+            <span class="pipeline-label">Approved</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="cbar-approved" style="background:var(--success);width:0"></div></div>
+            <span class="pipeline-count" id="ccnt-approved">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">QA Pending</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="cbar-qa" style="background:var(--warning);width:0"></div></div>
+            <span class="pipeline-count" id="ccnt-qa">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">QA Rejected</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="cbar-rejected" style="background:var(--danger);width:0"></div></div>
+            <span class="pipeline-count" id="ccnt-rejected">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">Human Review</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="cbar-human" style="background:var(--accent2);width:0"></div></div>
+            <span class="pipeline-count" id="ccnt-human">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lead Funnel -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🎯 Lead Funnel</span>
+          <span style="font-size:11px;color:var(--text-muted)" id="leads-total-badge">-- total</span>
+        </div>
+        <div class="card-body">
+          <div class="pipeline-item">
+            <span class="pipeline-label">Discovered</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="lbar-new" style="background:var(--info);width:0"></div></div>
+            <span class="pipeline-count" id="lcnt-new">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">CRM Synced</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="lbar-crm" style="background:var(--accent);width:0"></div></div>
+            <span class="pipeline-count" id="lcnt-crm">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">Contacted</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="lbar-contacted" style="background:var(--success);width:0"></div></div>
+            <span class="pipeline-count" id="lcnt-contacted">0</span>
+          </div>
+          <div class="pipeline-item">
+            <span class="pipeline-label">High Value (8+)</span>
+            <div class="pipeline-bar-wrap"><div class="pipeline-bar" id="lbar-hv" style="background:var(--gold);width:0"></div></div>
+            <span class="pipeline-count" id="lcnt-hv">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Finance + Chart ──────────────────────────────────── -->
+    <div class="section-title">💰 Financial Operations (Zero Cost)</div>
+    <div class="finance-row">
+      <div class="finance-card">
+        <div class="finance-val" id="fin-value">$0</div>
+        <div class="finance-label">Equivalent Value Generated</div>
+        <div class="finance-sub">vs $0 actual spend</div>
+      </div>
+      <div class="finance-card">
+        <div class="finance-val" id="fin-brevo" style="color:var(--info)">0%</div>
+        <div class="finance-label">Brevo Email Usage</div>
+        <div class="finance-sub" id="fin-brevo-sub">-- of 9,000/mo</div>
+      </div>
+      <div class="finance-card">
+        <div class="finance-val" id="fin-groq" style="color:var(--accent2)">0</div>
+        <div class="finance-label">Groq API Calls (Today)</div>
+        <div class="finance-sub">1,000/day limit</div>
+      </div>
+      <div class="finance-card">
+        <div class="finance-val" id="fin-roi" style="color:var(--success)">∞</div>
+        <div class="finance-label">ROI Ratio</div>
+        <div class="finance-sub">Zero-cost agency</div>
+      </div>
+    </div>
+
+    <!-- ─── Live Tasks + Alerts + Trigger  ──────────────────── -->
+    <div class="section-title">🔧 Operations</div>
+    <div class="panel-wide-2">
+
+      <!-- Left: recent tasks + recent content -->
+      <div>
+        <!-- Recent Tasks -->
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <span class="card-title">⚡ Recent Tasks</span>
+            <span style="font-size:11px;color:var(--text-muted)">Last 20</span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="tasks-tbody">
+                  <tr><td colspan="5" class="no-data">No tasks yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🚨 Active Alerts</span>
+            <span style="font-size:11px;color:var(--danger)" id="alert-count-badge">-- open</span>
+          </div>
+          <div class="card-body" id="alerts-feed">
+            <div class="no-data">No active alerts</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Trigger panel + Log stream -->
+      <div>
+        <!-- Agent Trigger Panel -->
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <span class="card-title">🚀 Trigger Agent</span>
+          </div>
+          <div class="card-body">
+            <div class="trigger-input-row">
+              <input id="brief-input" class="trigger-input" placeholder="Describe the task brief (e.g. AI tools for small businesses)" />
+            </div>
+            <div class="trigger-grid">
+              <button class="trigger-btn" onclick="triggerAgent('ceo_agent','market_analysis')">
+                <span class="icon">👑</span>
+                <div><span>CEO Agent</span><span class="sub">Market analysis + strategy</span></div>
+              </button>
+              <button class="trigger-btn" onclick="triggerAgent('content_agent','write_blog')">
+                <span class="icon">✍️</span>
+                <div><span>Content Agent</span><span class="sub">Write + critique blog post</span></div>
+              </button>
+              <button class="trigger-btn" onclick="triggerAgent('seo_agent','keyword_research')">
+                <span class="icon">🔍</span>
+                <div><span>SEO Agent</span><span class="sub">Competitor + keyword analysis</span></div>
+              </button>
+              <button class="trigger-btn" onclick="triggerAgent('design_agent','generate_assets')">
+                <span class="icon">🎨</span>
+                <div><span>Design Agent</span><span class="sub">Generate visual assets</span></div>
+              </button>
+              <button class="trigger-btn" onclick="triggerAgent('sales_agent','lead_gen')">
+                <span class="icon">🎯</span>
+                <div><span>Sales Agent</span><span class="sub">Discover + score leads</span></div>
+              </button>
+              <button class="trigger-btn" onclick="triggerAgent('analytics_agent','weekly_report')">
+                <span class="icon">📊</span>
+                <div><span>Analytics</span><span class="sub">Generate weekly report</span></div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Metrics Log -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Live Metrics Log</span>
+            <span style="font-size:10px;color:var(--text-muted)">Last 30 entries</span>
+          </div>
+          <div class="card-body" style="padding:12px">
+            <div class="log-stream" id="metrics-log">
+              <div style="color:var(--text-muted);font-size:11px">Connecting to data stream...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ─── Scripts ───────────────────────────────────────────────── -->
+<script>
+  // ─── Supabase Init ──────────────────────────────────────────
+  const SUPABASE_URL  = 'https://rvnampnllifrhgyitvps.supabase.co';
+  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2bmFtcG5sbGlmcmhneWl0dnBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjMxNzEsImV4cCI6MjA5MjMzOTE3MX0.VAMxtCSYXoMIDg3EOOs2viFucYTLrcDw3bf85cdJ15k';
+  const FASTAPI_URL   = 'http://localhost:8000';
+  const FASTAPI_KEY   = localStorage.getItem('nm_api_key') || '';
+
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ─── Agent Definitions ──────────────────────────────────────
+  const AGENTS = [
+    { id: 'ceo_agent',       icon: '👑', name: 'CEO Agent',       role: 'Strategy' },
+    { id: 'coo_agent',       icon: '🦾', name: 'COO Agent',       role: 'Operations' },
+    { id: 'content_agent',   icon: '✍️', name: 'Content Agent',   role: 'Writing' },
+    { id: 'design_agent',    icon: '🎨', name: 'Design Agent',    role: 'Visuals' },
+    { id: 'seo_agent',       icon: '🔍', name: 'SEO Agent',       role: 'Search' },
+    { id: 'ads_agent',       icon: '📣', name: 'Ads Agent',       role: 'Campaigns' },
+    { id: 'qa_agent',        icon: '🛡️', name: 'QA Agent',        role: 'Gatekeeper' },
+    { id: 'sales_agent',     icon: '🎯', name: 'Sales Agent',     role: 'Lead Gen' },
+    { id: 'crm_agent',       icon: '🤝', name: 'CRM Agent',       role: 'HubSpot' },
+    { id: 'email_agent',     icon: '📧', name: 'Email Agent',     role: 'Outreach' },
+    { id: 'analytics_agent', icon: '📊', name: 'Analytics Agent', role: 'Reports' },
+    { id: 'finance_agent',   icon: '💰', name: 'Finance Agent',   role: 'Finance' },
+  ];
+
+  // Value map (mirroring finance_agent.py)
+  const VALUE_MAP = {
+    blog_post: 75, social_posts: 15, seo_report: 50,
+    campaign_brief: 40, leads_qualified: 20, email_sent: 2,
+  };
+
+  // ─── Utilities ──────────────────────────────────────────────
+  const qs = id => document.getElementById(id);
+
+  function relativeTime(ts) {
+    if (!ts) return 'never';
+    const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (diff < 60)    return `${diff}s ago`;
+    if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+  }
+
+  function setBar(barId, pct, countId, count) {
+    const bar = qs(barId);
+    if (bar) bar.style.width = Math.min(pct, 100) + '%';
+    const cnt = qs(countId);
+    if (cnt) cnt.textContent = count;
+  }
+
+  function showToast(msg, type = 'info') {
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.textContent = msg;
+    qs('toast-container').appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+  }
+
+  // ─── Agent Grid ─────────────────────────────────────────────
+  function buildAgentGrid() {
+    qs('agent-grid').innerHTML = AGENTS.map(a => `
+      <div class="agent-card unknown" id="agent-${a.id}">
+        <div class="agent-avatar">${a.icon}</div>
+        <div class="agent-info">
+          <div class="agent-name">${a.name}</div>
+          <div class="agent-last" id="hb-${a.id}">checking...</div>
+          <div class="agent-tasks" id="tc-${a.id}"></div>
+        </div>
+        <div>
+          <span class="agent-status-badge unknown" id="sb-${a.id}">--</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function refreshAgents() {
+    const { data: heartbeats } = await sb.from('agent_heartbeats').select('*');
+    const { data: taskCounts } = await sb
+      .from('tasks')
+      .select('to_agent, status')
+      .in('status', ['pending','in_progress','done']);
+
+    // Count tasks per agent
+    const agentTaskCounts = {};
+    (taskCounts || []).forEach(t => {
+      if (!agentTaskCounts[t.to_agent]) agentTaskCounts[t.to_agent] = { done: 0, active: 0 };
+      if (t.status === 'done') agentTaskCounts[t.to_agent].done++;
+      else agentTaskCounts[t.to_agent].active++;
+    });
+
+    const hbMap = {};
+    (heartbeats || []).forEach(hb => hbMap[hb.agent_id] = hb);
+
+    let healthTotal = 0; let healthCount = 0;
+    const now = Date.now();
+
+    AGENTS.forEach(a => {
+      const card = qs(`agent-${a.id}`);
+      const badge = qs(`sb-${a.id}`);
+      const lastEl = qs(`hb-${a.id}`);
+      const tcEl = qs(`tc-${a.id}`);
+      if (!card) return;
+
+      const hb = hbMap[a.id];
+      const tc = agentTaskCounts[a.id] || { done: 0, active: 0 };
+      let status = 'unknown';
+
+      if (hb) {
+        const age = (now - new Date(hb.last_seen).getTime()) / 1000 / 60; // minutes
+        if (age < 10) status = 'healthy';
+        else if (age < 60) status = 'warning';
+        else status = 'offline';
+        lastEl.textContent = `Last seen: ${relativeTime(hb.last_seen)}`;
+      } else {
+        lastEl.textContent = 'No heartbeat yet';
+      }
+
+      card.className = `agent-card ${status}`;
+      badge.className = `agent-status-badge ${status}`;
+      badge.textContent = status;
+      tcEl.textContent = `${tc.done} done · ${tc.active} active`;
+
+      if (status === 'healthy') healthTotal += 100;
+      else if (status === 'warning') healthTotal += 50;
+      healthCount++;
+    });
+
+    const healthScore = healthCount > 0 ? Math.round(healthTotal / healthCount) : 0;
+    qs('header-health').textContent = healthScore;
+    qs('header-health').style.color = healthScore >= 80 ? 'var(--success)' : healthScore >= 50 ? 'var(--warning)' : 'var(--danger)';
+  }
+
+  // ─── KPI Row ─────────────────────────────────────────────────
+  async function refreshKPIs() {
+    // Tasks
+    const [tasksDone, tasksPending, tasksActive, tasksDead] = await Promise.all([
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'done'),
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'dead_letter'),
+    ]);
+    const done    = tasksDone.count    || 0;
+    const pending = tasksPending.count || 0;
+    const active  = tasksActive.count  || 0;
+    const dead    = tasksDead.count    || 0;
+    const total   = done + pending + active + dead;
+
+    qs('kpi-tasks-done').textContent = done;
+    qs('kpi-tasks-pending').textContent = `${pending} pending · ${active} active`;
+    qs('task-total-badge').textContent = `${total} total`;
+
+    const maxBar = Math.max(pending, active, done, dead, 1);
+    setBar('bar-pending', pending/maxBar*100, 'cnt-pending', pending);
+    setBar('bar-inprog',  active/maxBar*100,  'cnt-inprog',  active);
+    setBar('bar-done',    done/maxBar*100,    'cnt-done',    done);
+    setBar('bar-dead',    dead/maxBar*100,    'cnt-dead',    dead);
+
+    // Content
+    const [cApproved, cQA, cRejected, cHuman] = await Promise.all([
+      sb.from('content_queue').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
+      sb.from('content_queue').select('id', { count: 'exact', head: true }).eq('status', 'qa_pending'),
+      sb.from('content_queue').select('id', { count: 'exact', head: true }).eq('status', 'qa_rejected'),
+      sb.from('content_queue').select('id', { count: 'exact', head: true }).eq('status', 'needs_human_review'),
+    ]);
+    const ca = cApproved.count || 0, cq = cQA.count || 0, cr = cRejected.count || 0, ch = cHuman.count || 0;
+    const ctotal = ca + cq + cr + ch;
+    const qaRate = cq + ca > 0 ? Math.round(ca / (ca + cq + cr + ch) * 100) : 0;
+
+    qs('kpi-content-approved').textContent = ca;
+    qs('kpi-qa-rate').textContent = `QA pass: ${qaRate}%`;
+    qs('content-total-badge').textContent = `${ctotal} total`;
+
+    const cmMax = Math.max(ca, cq, cr, ch, 1);
+    setBar('cbar-approved', ca/cmMax*100, 'ccnt-approved', ca);
+    setBar('cbar-qa',       cq/cmMax*100, 'ccnt-qa',       cq);
+    setBar('cbar-rejected', cr/cmMax*100, 'ccnt-rejected', cr);
+    setBar('cbar-human',    ch/cmMax*100, 'ccnt-human',    ch);
+
+    // Leads
+    const [lNew, lCRM, lContacted, lHV] = await Promise.all([
+      sb.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+      sb.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'crm_synced'),
+      sb.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'contacted'),
+      sb.from('leads').select('id', { count: 'exact', head: true }).gte('score', 8),
+    ]);
+    const ln = lNew.count || 0, lc = lCRM.count || 0, lco = lContacted.count || 0, lhv = lHV.count || 0;
+    const ltotal = ln + lc + lco;
+    qs('kpi-leads').textContent = ltotal;
+    qs('kpi-leads-contacted').textContent = `${lco} contacted`;
+    qs('leads-total-badge').textContent = `${ltotal} total`;
+
+    const lmMax = Math.max(ln, lc, lco, lhv, 1);
+    setBar('lbar-new',      ln/lmMax*100,  'lcnt-new',      ln);
+    setBar('lbar-crm',      lc/lmMax*100,  'lcnt-crm',      lc);
+    setBar('lbar-contacted',lco/lmMax*100, 'lcnt-contacted', lco);
+    setBar('lbar-hv',       lhv/lmMax*100, 'lcnt-hv',        lhv);
+
+    // Emails today
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: emailData } = await sb.from('daily_limits').select('call_count').eq('provider', 'brevo').eq('date', today);
+    const emailsToday = (emailData || []).reduce((s, r) => s + r.call_count, 0);
+    qs('kpi-emails').textContent = emailsToday;
+
+    // Finance calcs
+    const valueGenerated = ca * 75 + lco * 20 + emailsToday * 2;
+    qs('kpi-value').textContent = `$${valueGenerated}`;
+    qs('fin-value').textContent = `$${valueGenerated}`;
+
+    const brevoMonthly = await (async () => {
+      const { data } = await sb.from('daily_limits').select('call_count').eq('provider', 'brevo');
+      return (data || []).reduce((s, r) => s + r.call_count, 0);
+    })();
+    const brevoPct = Math.round(brevoMonthly / 9000 * 100);
+    qs('fin-brevo').textContent = `${brevoPct}%`;
+    qs('fin-brevo-sub').textContent = `${brevoMonthly} of 9,000/mo`;
+
+    const todayGroq = await (async () => {
+      const { data } = await sb.from('daily_limits').select('call_count').eq('provider', 'groq').eq('date', today);
+      return (data || []).reduce((s, r) => s + r.call_count, 0);
+    })();
+    qs('fin-groq').textContent = todayGroq;
+
+    // Alerts
+    const { data: alertsData, count: alertCount } = await sb
+      .from('alerts').select('*', { count: 'exact' })
+      .eq('resolved', false).order('created_at', { ascending: false }).limit(10);
+
+    const openAlerts = alertCount || 0;
+    const criticals  = (alertsData || []).filter(a => a.severity === 'critical').length;
+    qs('kpi-alerts').textContent = openAlerts;
+    qs('kpi-alerts-sub').textContent = `${criticals} critical`;
+    qs('alert-count-badge').textContent = `${openAlerts} open`;
+
+    const alertsFeed = qs('alerts-feed');
+    if (!alertsData || alertsData.length === 0) {
+      alertsFeed.innerHTML = '<div class="no-data">✅ No active alerts</div>';
+    } else {
+      alertsFeed.innerHTML = alertsData.map(a => `
+        <div class="alert-item">
+          <div class="alert-icon">${a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟠' : '🟡'}</div>
+          <div class="alert-body">
+            <div class="alert-msg">${a.message || 'No message'}</div>
+            <div class="alert-meta">${a.agent_id} · <span class="badge ${a.severity}">${a.severity}</span> · ${relativeTime(a.created_at)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // ─── Tasks Table ─────────────────────────────────────────────
+  async function refreshTasksTable() {
+    const { data: tasks } = await sb
+      .from('tasks').select('to_agent, type, status, priority, created_at')
+      .order('created_at', { ascending: false }).limit(20);
+
+    const tbody = qs('tasks-tbody');
+    if (!tasks || tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="no-data">No tasks yet — trigger an agent to start</td></tr>';
+      return;
+    }
+    tbody.innerHTML = tasks.map(t => `
+      <tr>
+        <td>${t.to_agent || '--'}</td>
+        <td>${t.type || '--'}</td>
+        <td><span class="badge ${t.status}">${t.status}</span></td>
+        <td>${t.priority || 'normal'}</td>
+        <td>${relativeTime(t.created_at)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // ─── Metrics Log ─────────────────────────────────────────────
+  async function refreshMetricsLog() {
+    const { data: metrics } = await sb
+      .from('metrics').select('agent_id, metric_name, value, recorded_at')
+      .order('recorded_at', { ascending: false }).limit(30);
+
+    const log = qs('metrics-log');
+    if (!metrics || metrics.length === 0) {
+      log.innerHTML = '<div style="color:var(--text-muted)">No metrics yet</div>';
+      return;
+    }
+    log.innerHTML = [...metrics].reverse().map(m => `
+      <div class="log-line info">
+        <span class="log-ts">${relativeTime(m.recorded_at)}</span>
+        <span class="log-ag">${m.agent_id}</span>
+        <span class="log-msg">${m.metric_name}: ${m.value}</span>
+      </div>
+    `).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // ─── Trigger Agent ───────────────────────────────────────────
+  async function triggerAgent(agentName, taskType) {
+    const brief = qs('brief-input').value.trim() || 'AI-powered digital marketing for 2025';
+    const apiKey = localStorage.getItem('nm_api_key');
+    if (!apiKey) {
+      const key = prompt('Enter your AGENT_API_KEY from .env:');
+      if (!key) return;
+      localStorage.setItem('nm_api_key', key);
+    }
+
+    showToast(`Triggering ${agentName}...`, 'info');
+
+    try {
+      const resp = await fetch(`${FASTAPI_URL}/agent/run`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('nm_api_key')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from_agent: 'dashboard',
+          to_agent:   agentName,
+          task_type:  taskType,
+          input:      { brief, topic: brief, strategy_brief: brief, target: brief },
+        }),
+      });
+
+      if (resp.ok) {
+        showToast(`✅ ${agentName} triggered successfully!`, 'success');
+        setTimeout(refreshAll, 3000);
+      } else {
+        const err = await resp.json();
+        showToast(`❌ Error: ${err.detail || resp.statusText}`, 'error');
+      }
+    } catch (e) {
+      showToast(`❌ Cannot reach FastAPI at :8000. Is start.py running?`, 'error');
+    }
+  }
+
+  // ─── Auto-refresh ────────────────────────────────────────────
+  async function refreshAll() {
+    qs('last-update').textContent = 'Refreshing...';
+    await Promise.all([
+      refreshAgents(),
+      refreshKPIs(),
+      refreshTasksTable(),
+      refreshMetricsLog(),
+    ]);
+    qs('last-update').textContent = 'Updated ' + relativeTime(Date.now() - 100);
+  }
+
+  // ─── Init ────────────────────────────────────────────────────
+  buildAgentGrid();
+  refreshAll();
+
+  // Auto-refresh every 15 seconds
+  setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>

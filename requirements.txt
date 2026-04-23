@@ -1,0 +1,13 @@
+fastapi>=0.103.2
+uvicorn>=0.23.2
+pydantic>=2.4.2
+supabase>=2.3.0
+langchain>=0.3.0
+langchain-groq>=0.0.1
+langchain-google-genai>=0.0.5
+duckduckgo-search>=4.1.1
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+httpx>=0.25.0
+python-dotenv>=1.0.0
+notion-client>=2.2.1

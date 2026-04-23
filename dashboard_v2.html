@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaMind | Neural Command Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0b10;
+            --accent-blue: #00f2ff;
+            --accent-purple: #7000ff;
+            --accent-green: #00ffaa;
+            --accent-red: #ff0055;
+            --glass: rgba(15, 17, 26, 0.8);
+            --border: rgba(0, 242, 255, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* --- 3D Canvas --- */
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* --- HUD Elements --- */
+        #hud {
+            position: relative;
+            z-index: 10;
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            grid-template-rows: 80px 1fr 250px;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+            pointer-events: none;
+        }
+
+        #hud > * {
+            pointer-events: all;
+        }
+
+        /* Header */
+        header {
+            grid-column: 1 / 4;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border);
+            padding: 0 30px;
+            border-radius: 12px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            font-size: 1.4rem;
+        }
+
+        .logo span {
+            color: var(--accent-blue);
+            text-shadow: 0 0 15px var(--accent-blue);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-blue);
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-blue);
+            animation: pulse 2s infinite;
+        }
+
+        /* Left Panel: Agent Registry */
+        .panel-left {
+            grid-row: 2 / 3;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-blue);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .agent-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .agent-item.active {
+            border-color: var(--accent-blue);
+            background: rgba(0, 242, 255, 0.05);
+            transform: translateX(5px);
+        }
+
+        .agent-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .agent-status {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        /* Right Panel: Live Feed */
+        .panel-right {
+            grid-row: 2 / 3;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #log-feed {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+        }
+
+        .log-entry {
+            border-left: 2px solid var(--border);
+            padding-left: 10px;
+            padding-bottom: 5px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .log-time { color: #666; margin-right: 8px; }
+        .log-agent { color: var(--accent-blue); font-weight: bold; }
+        .log-msg { color: #ccc; }
+
+        /* Bottom Panel: Evolution & Metrics */
+        .panel-bottom {
+            grid-column: 1 / 4;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            gap: 40px;
+        }
+
+        .metric-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #666;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .evolution-map {
+            flex: 2;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.5); opacity: 0.4; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="hud">
+        <header>
+            <div class="logo">
+                <div class="pulse"></div>
+                NOVAMIND <span>OS</span>
+            </div>
+            <div id="connection-status" class="status-badge">
+                <span class="status-dot"></span>
+                ESTABLISHING NEURAL LINK...
+            </div>
+        </header>
+
+        <div class="panel-left">
+            <div class="panel-title">
+                Active Nodes
+                <span id="agent-count">0/13</span>
+            </div>
+            <div class="agent-list" id="agent-list">
+                <!-- Agents populated by WS -->
+            </div>
+        </div>
+
+        <div></div> <!-- Center empty for 3D map -->
+
+        <div class="panel-right">
+            <div class="panel-title">Neural Telemetry</div>
+            <div id="log-feed"></div>
+            
+            <div class="panel-title" style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">Boardroom Consensus</div>
+            <div style="background:rgba(0,0,0,0.2); height:10px; border-radius:5px; overflow:hidden; margin-top:10px;">
+                <div id="consensus-bar" style="width:0%; height:100%; background:var(--accent-purple); transition:width 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:0 0 10px var(--accent-purple);"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:0.7rem; color:#666; font-family:'JetBrains Mono';">
+                <span>DISSENT</span>
+                <span id="consensus-val">0%</span>
+                <span>HARMONY</span>
+            </div>
+        </div>
+
+        <div class="panel-bottom">
+            <div class="metric-card">
+                <div class="metric-label">Evolution Cycle</div>
+                <div class="metric-value" id="cycle-val">GEN 0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Agency Fitness</div>
+                <div class="metric-value" id="fitness-val">0.0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Tasks Routed</div>
+                <div class="metric-value" id="tasks-val">0</div>
+            </div>
+            <div class="evolution-map">
+                <div class="panel-title" style="position:absolute; top:10px; left:10px; margin:0;">Evolutionary Drift</div>
+                <canvas id="drift-chart" width="400" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // --- CONFIG ---
+        const WS_URL = "ws://localhost:8000/ws/live";
+        const AGENTS = [
+            "ceo_agent", "coo_agent", "intel_agent", "content_agent", 
+            "design_agent", "seo_agent", "ads_agent", "qa_agent", 
+            "sales_agent", "crm_agent", "email_agent", "analytics_agent", "finance_agent"
+        ];
+
+        // --- CHART SETUP ---
+        const ctx = document.getElementById('drift-chart').getContext('2d');
+        const driftChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Fitness',
+                    data: [],
+                    borderColor: '#00f2ff',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(0, 242, 255, 0.05)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#666', font: { size: 10 } }
+                    }
+                }
+            }
+        });
+
+        // --- 3D WORLD ---
+        let scene, camera, renderer, points, lines;
+        const agentNodes = {};
+        const connections = [];
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Particles
+            const geometry = new THREE.BufferGeometry();
+            const posArray = new Float32Array(3000 * 3);
+            for(let i=0; i<9000; i++) posArray[i] = (Math.random() - 0.5) * 60;
+            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const material = new THREE.PointsMaterial({ size: 0.03, color: 0x00f2ff, transparent: true, opacity: 0.3 });
+            points = new THREE.Points(geometry, material);
+            scene.add(points);
+
+            // Agent Spheres
+            AGENTS.forEach((agent, i) => {
+                const angle = (i / AGENTS.length) * Math.PI * 2;
+                const radius = 18;
+                const x = Math.cos(angle) * radius;
+                const y = (Math.random() - 0.5) * 8;
+                const z = Math.sin(angle) * radius;
+
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.4, 32, 32),
+                    new THREE.MeshBasicMaterial({ color: 0x111111 })
+                );
+                mesh.position.set(x, y, z);
+                scene.add(mesh);
+                
+                const glow = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6, 32, 32),
+                    new THREE.MeshBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.1 })
+                );
+                glow.position.set(x, y, z);
+                scene.add(glow);
+
+                agentNodes[agent] = { mesh, glow, pos: new THREE.Vector3(x, y, z) };
+            });
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.rotateSpeed = 0.5;
+
+            camera.position.z = 35;
+            camera.position.y = 10;
+            
+            function animate() {
+                requestAnimationFrame(animate);
+                points.rotation.y += 0.0005;
+                scene.rotation.y += 0.0002;
+                controls.update();
+                
+                // Animate connections
+                connections.forEach((c, index) => {
+                    c.material.opacity -= 0.01;
+                    if(c.material.opacity <= 0) {
+                        scene.remove(c);
+                        connections.splice(index, 1);
+                    }
+                });
+
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function drawConnection(fromAgent, toAgent) {
+            if(!agentNodes[fromAgent] || !agentNodes[toAgent]) return;
+            const linePoints = [agentNodes[fromAgent].pos, agentNodes[toAgent].pos];
+            const geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+            const material = new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.8 });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            connections.push(line);
+        }
+
+        // --- DASHBOARD LOGIC ---
+        function populateAgents() {
+            const list = document.getElementById('agent-list');
+            AGENTS.forEach(agent => {
+                const div = document.createElement('div');
+                div.className = 'agent-item';
+                div.id = `item-${agent}`;
+                div.innerHTML = `
+                    <span class="agent-name">${agent.replace('_agent', '').toUpperCase()}</span>
+                    <span class="agent-status" id="status-${agent}">IDLE</span>
+                `;
+                list.appendChild(div);
+            });
+            document.getElementById('agent-count').innerText = `0/${AGENTS.length}`;
+        }
+
+        function updateAgentState(agent, state, color) {
+            const item = document.getElementById(`item-${agent}`);
+            const status = document.getElementById(`status-${agent}`);
+            if(!item) return;
+
+            item.className = 'agent-item' + (state === 'IDLE' ? '' : ' active');
+            status.innerText = state;
+            status.style.color = color;
+
+            if(agentNodes[agent]) {
+                agentNodes[agent].glow.material.opacity = (state === 'IDLE') ? 0.1 : 0.8;
+                agentNodes[agent].glow.material.color.setHex(parseInt(color.replace('#','0x')));
+            }
+        }
+
+        function logTelemetry(agent, msg, color="#00f2ff") {
+            const feed = document.getElementById('log-feed');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const time = new Date().toLocaleTimeString([], {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            entry.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span class="log-agent" style="color:${color}">${agent}:</span>
+                <span class="log-msg">${msg}</span>
+            `;
+            feed.insertBefore(entry, feed.firstChild);
+            if(feed.childNodes.length > 40) feed.removeChild(feed.lastChild);
+        }
+
+        // --- WEBSOCKET ---
+        let tasksRouted = 0;
+        let generation = 0;
+
+        function connectWS() {
+            const ws = new WebSocket(WS_URL);
+            const status = document.getElementById('connection-status');
+
+            ws.onopen = () => {
+                status.innerHTML = '<span class="pulse" style="background:#00ffaa"></span> NEURAL LINK ACTIVE';
+                status.style.color = '#00ffaa';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                switch(data.type) {
+                    case 'task_queued':
+                        updateAgentState(data.to, 'PENDING', '#ffaa00');
+                        logTelemetry(data.to, `Incoming Task: ${data.task_type}`, '#ffaa00');
+                        drawConnection(data.from || 'ceo_agent', data.to);
+                        break;
+                    
+                    case 'task_started':
+                        updateAgentState(data.agent, 'BUSY', '#00f2ff');
+                        tasksRouted++;
+                        document.getElementById('tasks-val').innerText = tasksRouted;
+                        break;
+
+                    case 'task_completed':
+                        updateAgentState(data.agent, 'IDLE', '#00ffaa');
+                        logTelemetry(data.agent, `Task Success [${data.duration_ms}ms]`, '#00ffaa');
+                        break;
+
+                    case 'evolution_cycle':
+                        generation = data.generation;
+                        document.getElementById('cycle-val').innerText = `GEN ${generation}`;
+                        logTelemetry('DNA', `Mutation Deployed: ${data.prompt} (Gen ${generation})`, '#7000ff');
+                        break;
+                    
+                    case 'boardroom_consensus':
+                        const score = data.score * 10; // Assuming 0-10 scale
+                        document.getElementById('consensus-bar').style.width = `${score}%`;
+                        document.getElementById('consensus-val').innerText = `${score}%`;
+                        logTelemetry('BOARD', `Consensus Reached: ${score}% - Strategy Dispatched`, '#7000ff');
+                        break;
+
+                    case 'metric_logged':
+                        if(data.metric === 'health_score' || data.metric === 'agency_fitness') {
+                            const val = parseFloat(data.value);
+                            document.getElementById('fitness-val').innerText = val.toFixed(1);
+                            
+                            // Update Chart with actual data
+                            driftChart.data.labels.push('');
+                            driftChart.data.datasets[0].data.push(val);
+                            if(driftChart.data.labels.length > 20) {
+                                driftChart.data.labels.shift();
+                                driftChart.data.datasets[0].data.shift();
+                            }
+                            driftChart.update();
+                        }
+                        break;
+
+                    case 'alert_fired':
+                        logTelemetry('ALERT', data.message, '#ff0055');
+                        break;
+                }
+            };
+
+            ws.onclose = () => {
+                status.innerHTML = '<span class="pulse" style="background:#ff0055"></span> LINK SEVERED';
+                status.style.color = '#ff0055';
+                setTimeout(connectWS, 3000);
+            };
+        }
+
+        window.onload = () => {
+            init3D();
+            populateAgents();
+            connectWS();
+        };
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>

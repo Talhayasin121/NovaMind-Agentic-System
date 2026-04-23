@@ -1,0 +1,24 @@
+
+# Environment variables
+.env
+.env.*
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Artifacts and logs
+logs/
+*.log
+scratch/
+brain/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
